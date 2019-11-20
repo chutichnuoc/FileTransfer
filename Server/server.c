@@ -13,13 +13,16 @@
 
 const int _listenQueue = 1024;	// Backlog in listen()
 const int _bufferLength = 1024;
-const char *_terminateChar = "QUIT";
+const char *_terminateChar = "@logout";
 
 int downloadType = 0;
 
 char *firstClientAddr = NULL;
 char *firstClientAddrTmp = NULL;
 bool isFileSent = false;
+
+int clientCount = 0;
+pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
 
 void *handleRequest(void *arg) {
     int connClientSocket = *((int *) arg);
@@ -30,54 +33,67 @@ void *handleRequest(void *arg) {
     char buffer[_bufferLength];
     char fileName[_bufferLength];
 
-    if (firstClientAddr == NULL) {
-        firstClientAddr = firstClientAddrTmp;
-        // Read the requested file name
-        read(connClientSocket, fileName, sizeof(fileName));
-        printf("File name: %s\n", fileName);
-        downloadType = 1;
-        write(connClientSocket, &downloadType, sizeof(downloadType));
+    while (read(connClientSocket, fileName, sizeof(fileName)) > 0) {
+        if (strcmp(fileName, _terminateChar) == 0) {
+            break;
+        }
+        if (firstClientAddr == NULL) {
+            firstClientAddr = firstClientAddrTmp;
+            printf("File name: %s\n", fileName);
+            downloadType = 1;
+            write(connClientSocket, &downloadType, sizeof(downloadType));
 
-        FILE *file = fopen(fileName, "rb");
-        int size;
-        // Handle error
-        if (file == NULL) {
-            size = -1;
-            printf("Cannot find file '%s'!\n", fileName);
-            size = htonl(size);
-            write(connClientSocket, (void *) &size, sizeof(size));
+            FILE *file = fopen(fileName, "rb");
+            int size;
+            // Handle error
+            if (file == NULL) {
+                size = -1;
+                printf("Cannot find file '%s'!\n", fileName);
+                size = htonl(size);
+                write(connClientSocket, (void *) &size, sizeof(size));
+            }
+            else {
+                printf("Sending file '%s'\n", fileName);
+                // Send file length first
+                fseek(file, 0, SEEK_END);
+                size = ftell(file);
+                fseek(file, 0, SEEK_SET);
+                printf("File size: %d\n", size);
+                size = htonl(size);
+                write(connClientSocket, (void *) &size, sizeof(size));
+                // Send file
+                while (!feof(file)) {
+                    // Read file to buffer
+                    int readSize = fread(buffer, 1, sizeof(buffer) - 1, file);
+                    write(connClientSocket, buffer, readSize);
+                    // Zero out buffer after writing
+                    bzero(buffer, sizeof(buffer));
+                }
+                printf("Sent file successfully!\n");
+            }
+            isFileSent = true;
         }
         else {
-            printf("Sending file '%s'\n", fileName);
-            // Send file length first
-            fseek(file, 0, SEEK_END);
-            size = ftell(file);
-            fseek(file, 0, SEEK_SET);
-            printf("File size: %d\n", size);
-            size = htonl(size);
-            write(connClientSocket, (void *) &size, sizeof(size));
-            // Send file
-            while (!feof(file)) {
-                // Read file to buffer
-                int readSize = fread(buffer, 1, sizeof(buffer) - 1, file);
-                write(connClientSocket, buffer, readSize);
-                // Zero out buffer after writing
-                bzero(buffer, sizeof(buffer));
+            downloadType = 2;
+            write(connClientSocket, &downloadType, sizeof(downloadType));
+            while(true) {
+                //DO NOTHING
+                if (isFileSent) break;
             }
-            printf("Sent file successfully!\n");
+            write(connClientSocket, firstClientAddr, _bufferLength);
         }
-        isFileSent = true;
-    }
-    else {
-        downloadType = 2;
-        write(connClientSocket, &downloadType, sizeof(downloadType));
-        while(true) {
-            //DO NOTHING
-            if (isFileSent) break;
-        }
-        write(connClientSocket, firstClientAddr, _bufferLength);
-    }
+        pthread_mutex_lock(&mptr_clientCount);
+        clientCount++;
+        printf("Total Clients: %d\n", clientCount);
+        pthread_mutex_unlock(&mptr_clientCount);
+        if (clientCount == 3) {
+            printf("Reset now\n");
+            firstClientAddr = NULL;
+            isFileSent = false;
+            clientCount = 0;
 
+        }
+    }
     close(connClientSocket);
     return NULL;
 }

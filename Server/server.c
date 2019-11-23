@@ -10,6 +10,7 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<stdbool.h>
+#include<time.h>
 
 const int _listenQueue = 1024;	// Backlog in listen()
 const int _bufferLength = 1024;
@@ -21,7 +22,12 @@ char *firstClientAddr = NULL;
 char *firstClientAddrTmp = NULL;
 bool isFileSent = false;
 
+char fileName[1024] = "";
+
+int connectedClient = 0;
 int clientCount = 0;
+int clientReceived = 0;
+bool allReceived = true;
 pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
 
 void *handleRequest(void *arg) {
@@ -31,15 +37,21 @@ void *handleRequest(void *arg) {
 
     // Receive file name from client and send file back
     char buffer[_bufferLength];
-    char fileName[_bufferLength];
 
-    while (read(connClientSocket, fileName, sizeof(fileName)) > 0) {
-        if (strcmp(fileName, _terminateChar) == 0) {
-            break;
-        }
+    if (connectedClient == 3) {
+        printf("\nEnter file name to send: ");
+        scanf("%s", fileName);
+    }
+    while (1) {
+        if (connectedClient == 3 && strcmp(fileName, "") != 0) break;
+    }
+    while (1) {
+        if (!allReceived) continue;
+        write(connClientSocket, fileName, sizeof(fileName));
+        //int nbytes = write(connClientSocket, fileName, sizeof(fileName));
+        //printf("Nbytes: %d\n", nbytes);
         if (firstClientAddr == NULL) {
             firstClientAddr = firstClientAddrTmp;
-            printf("File name: %s\n", fileName);
             downloadType = 1;
             write(connClientSocket, &downloadType, sizeof(downloadType));
 
@@ -68,7 +80,9 @@ void *handleRequest(void *arg) {
                     write(connClientSocket, buffer, readSize);
                     // Zero out buffer after writing
                     bzero(buffer, sizeof(buffer));
+                    //printf ("readSize: %d\n", readSize);
                 }
+                fclose(file);
                 printf("Sent file successfully!\n");
             }
             isFileSent = true;
@@ -76,22 +90,37 @@ void *handleRequest(void *arg) {
         else {
             downloadType = 2;
             write(connClientSocket, &downloadType, sizeof(downloadType));
-            while(true) {
+            write(connClientSocket, firstClientAddr, _bufferLength);
+            while (1) {
                 //DO NOTHING
                 if (isFileSent) break;
             }
-            write(connClientSocket, firstClientAddr, _bufferLength);
         }
         pthread_mutex_lock(&mptr_clientCount);
         clientCount++;
-        printf("Total Clients: %d\n", clientCount);
+        //printf("Total Clients: %d\n", clientCount);
         pthread_mutex_unlock(&mptr_clientCount);
         if (clientCount == 3) {
-            printf("Reset now\n");
+            allReceived = false;
+        }
+        int done = 0;
+        read (connClientSocket, &done, sizeof(done));
+        if (done == 1) {
+            pthread_mutex_lock(&mptr_clientCount);
+            clientReceived++;
+            //printf("Total Clients Received: %d\n", clientReceived);
+            pthread_mutex_unlock(&mptr_clientCount);
+        }
+
+        if (clientReceived == 3) {
+            bzero(fileName, sizeof(fileName));
+            printf("\nEnter file name to send: ");
+            scanf("%s", fileName);
             firstClientAddr = NULL;
             isFileSent = false;
             clientCount = 0;
-
+            clientReceived = 0;
+            allReceived = true;
         }
     }
     close(connClientSocket);
@@ -157,6 +186,7 @@ int main() {
         int clientPort = ntohs(connClientAddr.sin_port);
 
         printf("Client address: %s:%d\n", clientIpAddr, clientPort);
+        connectedClient++;
 
         // Create a thread to handle requests of client
         pthread_t tid;
@@ -166,3 +196,4 @@ int main() {
     close(serverSocket);
     return 0;
 }
+

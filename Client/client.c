@@ -10,8 +10,13 @@
 #include<time.h>
 #include<stdlib.h>
 #include<stdio.h>
+#include<stdbool.h>
+#include<time.h>
+
 const int _bufferLength = 1024;
-const char *_terminateChar = "@logout";
+const char *_terminateChar = "@exit";
+
+char fileName[1024];
 
 int clientCountInside = 0;
 int clientCountOutside = 0;
@@ -24,11 +29,6 @@ void *handleRequest(void *arg) {
 
     // Receive file name from client and send file back
     char buffer[_bufferLength];
-    char fileName[_bufferLength];
-
-    // Receive file name from client
-	read(connClientSocket, fileName, sizeof(fileName));
-	printf("File name: %s\n", fileName);
 
     FILE *file = fopen(fileName, "rb");
     int size;
@@ -56,6 +56,7 @@ void *handleRequest(void *arg) {
             // Zero out buffer after writing
             bzero(buffer, sizeof(buffer));
         }
+        fclose(file);
         printf("Sent file successfully!\n");
         pthread_mutex_lock(&mptr_clientCount);
         clientCountInside++;
@@ -83,7 +84,6 @@ int main() {
 
     int downloadType;
     char receiveBuffer[_bufferLength];
-    char fileName[_bufferLength];
 
     int nbytes = 0;
 
@@ -115,19 +115,19 @@ int main() {
     printf("Connected to server.\n");
 
     while (1) {
-        printf("Enter file name to download, @logout to stop: ");
-        scanf("%s", fileName);
-
-        nbytes = write(serverSocket, fileName, sizeof(fileName));
-        printf("nbytes: %d\n", nbytes);
-
-
+        bzero(fileName, sizeof(fileName));
+        //printf("Still here\n");
+        //nbytes =
+        read(serverSocket, fileName, sizeof(fileName));
+        //printf("nbytes: %d\n", nbytes);
         if (strcmp(fileName, _terminateChar) == 0) {
             break;
         }
 
-        read (serverSocket, &downloadType, sizeof(downloadType));
+        printf("Filename: %s\n", fileName);
 
+        read (serverSocket, &downloadType, sizeof(downloadType));
+        printf("DownloadType: %d\n", downloadType);
         if (downloadType == 1) {
             // Receive file size
             unsigned int fileSize = 0;
@@ -141,6 +141,7 @@ int main() {
             // Handle error
             if (fileSize == -1) {
                 printf("Cannot download file '%s'!\n", fileName);
+                continue;
             }
             // Receive file
             else {
@@ -151,10 +152,17 @@ int main() {
                     int currRcvSize = read(serverSocket, receiveBuffer, _bufferLength);
                     receivedSize += currRcvSize;
                     fwrite(receiveBuffer, 1, currRcvSize, file);
+                    //printf ("currRcvSize: %d\n", currRcvSize);
                 }
-                fseek(file, 0, SEEK_END);
-                fseek(file, 0, SEEK_SET);
+                //fseek(file, 0, SEEK_END);
+                //fileSize = ftell(file);
+                //(file, 0, SEEK_SET);
+                printf("Received size: %d\n", receivedSize);
+                //printf("File size: %d\n", fileSize);
+                fclose(file);
                 printf("Received file successfully!\n");
+                int done = 1;
+                write (serverSocket, &done, sizeof(done));
             }
 
             printf("\nAct like server now\n");
@@ -187,6 +195,7 @@ int main() {
 
             printf("Server is listening at port %d. Waiting for connection...\n", _port);
             unsigned int addrLength = sizeof(connClientAddr);
+
             while (1) {
                 if (clientCountOutside == 2)
                 {
@@ -224,6 +233,7 @@ int main() {
         }
         else if (downloadType == 2) {
             read (serverSocket, receiveBuffer, sizeof(receiveBuffer));
+
             printf("Download from %s\n", receiveBuffer);
 
             serverSocket3 = socket(_family, _type, _protocol);
@@ -236,20 +246,16 @@ int main() {
             serverAddr3.sin_family = _family;
 
             // Connect to server by using serverSocket
-            int connCheck = connect(serverSocket3, (struct sockaddr *) &serverAddr3, sizeof(serverAddr3));
+            int connCheck = -1;
+            while (connCheck < 0) {
+                connCheck = connect(serverSocket3, (struct sockaddr *) &serverAddr3, sizeof(serverAddr3));
+            }
             if (connCheck < 0) {
                 perror("Connect error");
                 return 1;
             }
 
             printf("Connected to server.\n");
-
-            // Send file name to server
-            nbytes = write(serverSocket3, fileName, sizeof(fileName));
-            if (nbytes < 0) {
-                perror("Write error");
-                return 1;
-            }
 
             // Receive file size
             unsigned int fileSize = 0;
@@ -274,9 +280,15 @@ int main() {
                     receivedSize += currRcvSize;
                     fwrite(receiveBuffer, 1, currRcvSize, file);
                 }
+                fclose(file);
+                printf("Received file successfully!\n");
             }
             close(serverSocket3);
+            printf("Closed\n\n");
+            int done = 1;
+            write (serverSocket, &done, sizeof(done));
         }
+
     }
 
     close(serverSocket);
@@ -284,3 +296,4 @@ int main() {
 
     return 0;
 }
+

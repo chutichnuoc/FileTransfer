@@ -25,8 +25,8 @@ bool isFileSent = false;
 char fileName[1024] = "";
 
 int connectedClient = 0;
-int clientCount = 0;
 int clientReceived = 0;
+int nameCount = 0;
 bool allReceived = true;
 pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
 
@@ -50,11 +50,16 @@ void *handleRequest(void *arg) {
         write(connClientSocket, fileName, sizeof(fileName));
         //int nbytes = write(connClientSocket, fileName, sizeof(fileName));
         //printf("Nbytes: %d\n", nbytes);
+        pthread_mutex_lock(&mptr_clientCount);
+        nameCount++;
+        pthread_mutex_unlock(&mptr_clientCount);
         if (firstClientAddr == NULL) {
             firstClientAddr = firstClientAddrTmp;
             downloadType = 1;
             write(connClientSocket, &downloadType, sizeof(downloadType));
-
+            while (1) {
+                if (nameCount == 3) break;
+            }
             FILE *file = fopen(fileName, "rb");
             int size;
             // Handle error
@@ -96,11 +101,8 @@ void *handleRequest(void *arg) {
                 if (isFileSent) break;
             }
         }
-        pthread_mutex_lock(&mptr_clientCount);
-        clientCount++;
-        //printf("Total Clients: %d\n", clientCount);
-        pthread_mutex_unlock(&mptr_clientCount);
-        if (clientCount == 3) {
+
+        if (nameCount == 3) {
             allReceived = false;
         }
         int done = 0;
@@ -118,8 +120,8 @@ void *handleRequest(void *arg) {
             scanf("%s", fileName);
             firstClientAddr = NULL;
             isFileSent = false;
-            clientCount = 0;
             clientReceived = 0;
+            nameCount = 0;
             allReceived = true;
         }
     }

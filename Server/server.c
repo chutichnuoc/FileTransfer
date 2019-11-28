@@ -12,7 +12,7 @@
 #include<stdbool.h>
 #include<time.h>
 
-const int _listenQueue = 1024;	// Backlog in listen()
+const int _listenQueue = 1024;  // Backlog in listen()
 const int _bufferLength = 1024;
 const char *_terminateChar = "@logout";
 
@@ -86,11 +86,11 @@ void *handleRequest(void *arg) {
                     // Zero out buffer after writing
                     bzero(buffer, sizeof(buffer));
                     //printf ("readSize: %d\n", readSize);
+                isFileSent = true;
                 }
                 fclose(file);
                 printf("Sent file successfully!\n");
             }
-            isFileSent = true;
         }
         else {
             downloadType = 2;
@@ -130,8 +130,8 @@ void *handleRequest(void *arg) {
 }
 
 int main() {
-    const int _family = AF_INET;	// IPv4
-    const int _type = SOCK_STREAM;	// TCP
+    const int _family = AF_INET;    // IPv4
+    const int _type = SOCK_STREAM;  // TCP
     const int _protocol = 0;
     const int _port = 8080;
 
@@ -147,7 +147,7 @@ int main() {
     }
 
     int option = 1;
-	setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 
 
     bzero(&serverAddr, sizeof(serverAddr));

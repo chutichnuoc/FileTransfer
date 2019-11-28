@@ -18,9 +18,13 @@ const char *_terminateChar = "@exit";
 
 char fileName[1024];
 
-int clientCountInside = 0;
-int clientCountOutside = 0;
+int clientCount = 0;
 pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
+
+int gobalSize = -1;
+
+bool received = false;
+bool fullyReceived = false;
 
 void *handleRequest(void *arg) {
     int connClientSocket = *((int *) arg);
@@ -29,8 +33,11 @@ void *handleRequest(void *arg) {
 
     // Receive file name from client and send file back
     char buffer[_bufferLength];
+    while(1) {
+        if (received) break;
+    }
 
-    FILE *file = fopen(fileName, "rb");
+    FILE *file = fopen(fileName, "rb+");
     int size;
     // Handle error
     if (file == NULL) {
@@ -42,34 +49,32 @@ void *handleRequest(void *arg) {
     else {
         printf("Sending file '%s'\n", fileName);
         // Send file length first
-        fseek(file, 0, SEEK_END);
-        size = ftell(file);
+        //fseek(file, 0, SEEK_END);
+        //size = ftell(file);
+        size = gobalSize;
         fseek(file, 0, SEEK_SET);
         printf("File size: %d\n", size);
         size = htonl(size);
         write(connClientSocket, (void *) &size, sizeof(size));
         // Send file
-        while (!feof(file)) {
+        while (1) {
             // Read file to buffer
             int readSize = fread(buffer, 1, sizeof(buffer) - 1, file);
             write(connClientSocket, buffer, readSize);
             // Zero out buffer after writing
             bzero(buffer, sizeof(buffer));
+            if (fullyReceived) break;
         }
         fclose(file);
         printf("Sent file successfully!\n");
-        pthread_mutex_lock(&mptr_clientCount);
-        clientCountInside++;
-        printf("Total Clients: %d\n", clientCountInside);
-        pthread_mutex_unlock(&mptr_clientCount);
     }
     close(connClientSocket);
     return NULL;
 }
 
 int main() {
-    const int _family = AF_INET;	// IPv4
-    const int _type = SOCK_STREAM;	// TCP
+    const int _family = AF_INET;    // IPv4
+    const int _type = SOCK_STREAM;  // TCP
     const int _protocol = 0;
     const int _listenQueue = 1024;
     const int _port = 9090;
@@ -129,43 +134,8 @@ int main() {
         read (serverSocket, &downloadType, sizeof(downloadType));
         printf("DownloadType: %d\n", downloadType);
         if (downloadType == 1) {
-            // Receive file size
-            unsigned int fileSize = 0;
-            unsigned int receivedSize = 0;
-            nbytes = read(serverSocket, &fileSize, sizeof(fileSize));
-            if (nbytes < 0) {
-                perror("Read error");
-                return 1;
-            }
-            fileSize = ntohl(fileSize);
-            // Handle error
-            if (fileSize == -1) {
-                printf("Cannot download file '%s'!\n", fileName);
-                continue;
-            }
-            // Receive file
-            else {
-                FILE *file = fopen(fileName, "wb");
-                printf("Receiving file '%s'\n", fileName);
-                printf("File size: %d\n", fileSize);
-                while (receivedSize < fileSize) {
-                    int currRcvSize = read(serverSocket, receiveBuffer, _bufferLength);
-                    receivedSize += currRcvSize;
-                    fwrite(receiveBuffer, 1, currRcvSize, file);
-                    //printf ("currRcvSize: %d\n", currRcvSize);
-                }
-                //fseek(file, 0, SEEK_END);
-                //fileSize = ftell(file);
-                //(file, 0, SEEK_SET);
-                printf("Received size: %d\n", receivedSize);
-                //printf("File size: %d\n", fileSize);
-                fclose(file);
-                printf("Received file successfully!\n");
-                int done = 1;
-                write (serverSocket, &done, sizeof(done));
-            }
 
-            printf("\nAct like server now\n");
+        printf("\nAct like server now\n");
 
             serverSocket2 = socket(_family, _type, _protocol);
             if (serverSocket2 < 0) {
@@ -197,13 +167,8 @@ int main() {
             unsigned int addrLength = sizeof(connClientAddr);
 
             while (1) {
-                if (clientCountOutside == 2)
+                if (clientCount == 2)
                 {
-                    while (1)
-                    {
-                        //DO NOTHING
-                        if (clientCountInside == 2) break;
-                    }
                     break;
                 }
                 connClientSocket = malloc(sizeof(int));
@@ -224,11 +189,53 @@ int main() {
                 // Create a thread to handle requests of client
                 pthread_t tid;
                 pthread_create(&tid, NULL, &handleRequest, (void *) connClientSocket);
-                clientCountOutside++;
+                clientCount++;
             }
-            clientCountInside = 0;
-            clientCountOutside = 0;
+            clientCount = 0;
             close(serverSocket2);
+
+            // Receive file size
+            unsigned int fileSize = 0;
+            unsigned int receivedSize = 0;
+            nbytes = read(serverSocket, &fileSize, sizeof(fileSize));
+            if (nbytes < 0) {
+                perror("Read error");
+                return 1;
+            }
+            fileSize = ntohl(fileSize);
+                gobalSize = fileSize;
+                received = true;
+            // Handle error
+            if (fileSize == -1) {
+                printf("Cannot download file '%s'!\n", fileName);
+                continue;
+            }
+            // Receive file
+            else {
+                FILE *file = fopen(fileName, "wb+");
+                printf("Receiving file '%s'\n", fileName);
+                printf("File size: %d\n", fileSize);
+                while (receivedSize < fileSize) {
+                    int currRcvSize = read(serverSocket, receiveBuffer, _bufferLength);
+                    receivedSize += currRcvSize;
+                    fwrite(receiveBuffer, 1, currRcvSize, file);
+                    //printf ("currRcvSize: %d\n", currRcvSize);
+                }
+                //fseek(file, 0, SEEK_END);
+                //fileSize = ftell(file);
+                //(file, 0, SEEK_SET);
+                printf("Received size: %d\n", receivedSize);
+                //printf("File size: %d\n", fileSize);
+                fclose(file);
+                fullyReceived = true;
+                printf("Received file successfully!\n");
+                int done = 1;
+                write (serverSocket, &done, sizeof(done));
+            }
+
+
+            received = false;
+            fullyReceived = false;
             printf("Closed\n\n");
         }
         else if (downloadType == 2) {

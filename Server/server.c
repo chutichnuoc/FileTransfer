@@ -30,6 +30,13 @@ int nameCount = 0;
 bool allReceived = true;
 pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
 
+void showTime() {
+    time_t mytime = time(NULL);
+    char * time_str = ctime(&mytime);
+    time_str[strlen(time_str)-1] = '\0';
+    printf("Current Time : %s\n", time_str);
+}
+
 void *handleRequest(void *arg) {
     int connClientSocket = *((int *) arg);
     free(arg);
@@ -41,6 +48,7 @@ void *handleRequest(void *arg) {
     if (connectedClient == 3) {
         printf("\nEnter file name to send: ");
         scanf("%s", fileName);
+        showTime();
     }
     while (1) {
         if (connectedClient == 3 && strcmp(fileName, "") != 0) break;
@@ -118,6 +126,7 @@ void *handleRequest(void *arg) {
             bzero(fileName, sizeof(fileName));
             printf("\nEnter file name to send: ");
             scanf("%s", fileName);
+            showTime();
             firstClientAddr = NULL;
             isFileSent = false;
             clientReceived = 0;

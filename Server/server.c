@@ -16,7 +16,6 @@ const int _listenQueue = 1024;  // Backlog in listen()
 const int _bufferLength = 1024;
 const char *_terminateChar = "@logout";
 
-int downloadType = 0;
 
 char *firstClientAddr = NULL;
 char *firstClientAddrTmp = NULL;
@@ -44,6 +43,7 @@ void *handleRequest(void *arg) {
 
     // Receive file name from client and send file back
     char buffer[_bufferLength];
+    int downloadType = 0;
 
     if (connectedClient == 3) {
         printf("\nEnter file name to send: ");
@@ -61,7 +61,7 @@ void *handleRequest(void *arg) {
         pthread_mutex_lock(&mptr_clientCount);
         nameCount++;
         pthread_mutex_unlock(&mptr_clientCount);
-        if (firstClientAddr == NULL) {
+        if (firstClientAddr == NULL || downloadType == 1) {
             firstClientAddr = firstClientAddrTmp;
             downloadType = 1;
             write(connClientSocket, &downloadType, sizeof(downloadType));
@@ -127,7 +127,7 @@ void *handleRequest(void *arg) {
             printf("\nEnter file name to send: ");
             scanf("%s", fileName);
             showTime();
-            firstClientAddr = NULL;
+            //firstClientAddr = NULL;
             isFileSent = false;
             clientReceived = 0;
             nameCount = 0;

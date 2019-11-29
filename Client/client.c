@@ -66,16 +66,17 @@ void *handleRequest(void *arg) {
         write(connClientSocket, (void *) &size, sizeof(size));
         int totalSent = 0;
         // Send file
-        while (1) {
+        while (totalSent < gobalSize) {
             // Read file to buffer
             int readSize = fread(buffer, 1, sizeof(buffer) - 1, file);
             write(connClientSocket, buffer, readSize);
             totalSent += readSize;
             // Zero out buffer after writing
             bzero(buffer, sizeof(buffer));
-            if (fullyReceived && feof(file)) break;
+            //if (fullyReceived && feof(file)) break;
         }
         fclose(file);
+        printf("Send: %d\n", totalSent);
         pthread_mutex_lock(&mptr_clientCount);
         clientReceived++;
         pthread_mutex_unlock(&mptr_clientCount);

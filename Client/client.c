@@ -14,7 +14,7 @@
 #include<time.h>
 
 const int _bufferLength = 1024;
-const char *_quitCommand = "@logout";
+const char *_quitCommand = "@quit";
 
 char fileName[1024];
 
@@ -75,7 +75,7 @@ void* handleRequest(void* arg) {
 			bzero(buffer, sizeof(buffer));
 		}
 		fclose(file);
-		printf("Send: %d\n", sendSize);
+		//printf("Send: %d\n", sendSize);
 		pthread_mutex_lock(&mptr_clientCount);
 		receivedClient++;
 		pthread_mutex_unlock(&mptr_clientCount);
@@ -314,3 +314,4 @@ int main() {
 
 	return 0;
 }
+

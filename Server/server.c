@@ -14,6 +14,7 @@
 
 const int _listenQueue = 1024;  // Backlog in listen()
 const int _bufferLength = 1024;
+const char *_quitCommand = "@quit";
 
 char* lastClientAddr = NULL;
 char* lastClientAddrTmp = NULL;
@@ -68,6 +69,18 @@ void* handleRequest(void* arg) {
 		pthread_mutex_lock(&mptr_clientCount);
 		receivedNameClient++;
 		pthread_mutex_unlock(&mptr_clientCount);
+		if (strcmp(fileName, _quitCommand) == 0) {
+            while (1) {
+                if (receivedNameClient == 3) {
+                    isFileSent = false;
+                    receivedClient = 0;
+                    receivedNameClient = 0;
+                    allReceived = true;
+                    connectedClient = 0;
+                    break;
+                }
+            }
+		}
 		if (lastClientAddr == NULL || downloadType == 1) {
 			lastClientAddr = lastClientAddrTmp;
 			downloadType = 1;
@@ -182,6 +195,9 @@ int main() {
 
 	while (1) {
 		connClientSocket = malloc(sizeof(int));
+		if (strcmp(fileName, _quitCommand) == 0) {
+            break;
+		}
 		*connClientSocket = accept(serverSocket, (struct sockaddr*) & connClientAddr, &addrLength);
 		if (connClientSocket < 0) {
 			if (errno == EINTR) continue;
@@ -206,3 +222,4 @@ int main() {
 	close(serverSocket);
 	return 0;
 }
+

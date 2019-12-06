@@ -16,19 +16,19 @@ const int _listenQueue = 1024;  // Backlog in listen()
 const int _bufferLength = 1024;
 const char *_quitCommand = "@quit";
 
+// Status
 char* lastClientAddr = NULL;
 char* lastClientAddrTmp = NULL;
-
 char fileName[1024] = "";
-
 int connectedClient = 0;
-int receivedClient = 0;
 int receivedNameClient = 0;
+int receivedFileClient = 0;
 bool isFileSent = false;
 bool allReceived = true;
 
 pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
 
+// Show current time
 void showTime() {
 	time_t mytime = time(NULL);
 	char* time_str = ctime(&mytime);
@@ -36,17 +36,24 @@ void showTime() {
 	printf("Current Time : %s\n", time_str);
 }
 
+// Called when need to reset server's status
 void resetStatus() {
+    receivedNameClient = 0;
+    receivedFileClient = 0;
+    isFileSent = false;
+    allReceived = true;
+}
+
+// Called when all client received file
+void setFileName() {
     bzero(fileName, sizeof(fileName));
     printf("\nEnter file name to send: ");
     scanf("%s", fileName);
     showTime();
-    isFileSent = false;
-    receivedClient = 0;
-    receivedNameClient = 0;
-    allReceived = true;
+    resetStatus();
 }
 
+// Multi thread
 void* handleRequest(void* arg) {
 	int connClientSocket = *((int*)arg);
 	free(arg);
@@ -55,36 +62,42 @@ void* handleRequest(void* arg) {
 	char buffer[_bufferLength];
 	int downloadType = 0;
 
+	// Wait until 3 clients connect to server, then enter file's name, only run in thread of third client
 	if (connectedClient == 3) {
 		printf("\nEnter file name to send: ");
 		scanf("%s", fileName);
 		showTime();
 	}
+	// First and second client will wait here until third client connect and server enter file's name
 	while (1) {
-		if (connectedClient == 3 && strcmp(fileName, "") != 0) break;
+		if (connectedClient == 3 && strcmp(fileName, "") != 0) {
+            break;
+        }
 	}
+	// Send file to client
 	while (1) {
-		if (!allReceived) continue;
+		if (!allReceived) continue; // If a client received file, it must wait for two others
 		write(connClientSocket, fileName, sizeof(fileName));
 		pthread_mutex_lock(&mptr_clientCount);
-		receivedNameClient++;
+		receivedNameClient++; // Increase number of clients that received file'name
 		pthread_mutex_unlock(&mptr_clientCount);
+
+		// If server enter quitCommand, wait for all clients to receive it, then reset status and break;
 		if (strcmp(fileName, _quitCommand) == 0) {
             while (1) {
                 if (receivedNameClient == 3) {
-                    isFileSent = false;
-                    receivedClient = 0;
-                    receivedNameClient = 0;
-                    allReceived = true;
-                    connectedClient = 0;
+                    resetStatus();
                     break;
                 }
             }
 		}
+
+		// If downloadType = 1, client will receive file and send to others
 		if (lastClientAddr == NULL || downloadType == 1) {
 			lastClientAddr = lastClientAddrTmp;
 			downloadType = 1;
 			write(connClientSocket, &downloadType, sizeof(downloadType));
+			// Wait until all clients have file's name
 			while (1) {
 				if (receivedNameClient == 3) break;
 			}
@@ -114,19 +127,19 @@ void* handleRequest(void* arg) {
 					write(connClientSocket, buffer, readSize);
 					// Zero out buffer after writing
 					bzero(buffer, sizeof(buffer));
-					//printf ("readSize: %d\n", readSize);
 					isFileSent = true;
 				}
 				fclose(file);
 				printf("Sent file successfully!\n");
 			}
 		}
+		// If downloadType = 2, client will receive IP of other client which downloaded file from server
 		else {
 			downloadType = 2;
 			write(connClientSocket, &downloadType, sizeof(downloadType));
 			write(connClientSocket, lastClientAddr, _bufferLength);
+			// Wait until downloadType = 1 client receive first peice of file
 			while (1) {
-				//DO NOTHING
 				if (isFileSent) break;
 			}
 		}
@@ -134,17 +147,18 @@ void* handleRequest(void* arg) {
 		if (receivedNameClient == 3) {
 			allReceived = false;
 		}
+
 		int done = 0;
 		read(connClientSocket, &done, sizeof(done));
 		if (done == 1) {
 			pthread_mutex_lock(&mptr_clientCount);
-			receivedClient++;
-			//printf("Total Clients Received: %d\n", clientReceived);
+			receivedFileClient++; // Increase number of client that received file
 			pthread_mutex_unlock(&mptr_clientCount);
 		}
 
-		if (receivedClient == 3) {
-            resetStatus();
+		// Enter file's name again
+		if (receivedFileClient == 3) {
+            setFileName();
 		}
 	}
 	close(connClientSocket);
@@ -193,11 +207,8 @@ int main() {
 
 	unsigned int addrLength = sizeof(connClientAddr);
 
-	while (1) {
+	while (strcmp(fileName, _quitCommand) != 0) {
 		connClientSocket = malloc(sizeof(int));
-		if (strcmp(fileName, _quitCommand) == 0) {
-            break;
-		}
 		*connClientSocket = accept(serverSocket, (struct sockaddr*) & connClientAddr, &addrLength);
 		if (connClientSocket < 0) {
 			if (errno == EINTR) continue;

@@ -16,17 +16,17 @@
 const int _bufferLength = 1024;
 const char *_quitCommand = "@quit";
 
+// Status
 char fileName[1024];
-
 int clientCount = 0;
 int receivedClient = 0;
-pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
-
 int gobalSize = -1;
-
 bool received = false;
 bool fullyReceived = false;
 
+pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
+
+// Show current time
 void showTime() {
 	time_t mytime = time(NULL);
 	char* time_str = ctime(&mytime);
@@ -34,13 +34,21 @@ void showTime() {
 	printf("Current Time : %s\n", time_str);
 }
 
+// Called when need to reset client's status
+void resetStatus() {
+    receivedClient = 0;
+    received = false;
+    fullyReceived = false;
+}
+
+// Multi thread
 void* handleRequest(void* arg) {
 	int connClientSocket = *((int*)arg);
 	free(arg);
 	pthread_detach(pthread_self());
 
-	// Receive file name from client and send file back
 	char buffer[_bufferLength];
+	// Wait until received first peice of file from server
 	while (1) {
 		if (received) break;
 	}
@@ -75,9 +83,8 @@ void* handleRequest(void* arg) {
 			bzero(buffer, sizeof(buffer));
 		}
 		fclose(file);
-		//printf("Send: %d\n", sendSize);
 		pthread_mutex_lock(&mptr_clientCount);
-		receivedClient++;
+		receivedClient++; // Increase number of clients that received file
 		pthread_mutex_unlock(&mptr_clientCount);
 	}
 	close(connClientSocket);
@@ -142,10 +149,10 @@ int main() {
 
 		read(serverSocket, &downloadType, sizeof(downloadType));
 		printf("DownloadType: %d\n", downloadType);
+
+		// Receive file from server and send file to other clients
 		if (downloadType == 1) {
-
 			printf("\nAct like server now\n");
-
 			shareFileSocket = socket(_family, _type, _protocol);
 			if (shareFileSocket < 0) {
 				perror("Server socket error");
@@ -175,11 +182,8 @@ int main() {
 			printf("Server is listening at port %d. Waiting for connection...\n", _port);
 			unsigned int addrLength = sizeof(connClientAddr);
 
-			while (1) {
-				if (clientCount == 2)
-				{
-					break;
-				}
+			// Wait for other clients to connect
+			while (clientCount != 2) {
 				connClientSocket = malloc(sizeof(int));
 				*connClientSocket = accept(shareFileSocket, (struct sockaddr*) & connClientAddr, &addrLength);
 				if (connClientSocket < 0) {
@@ -233,21 +237,20 @@ int main() {
 					fwrite(receiveBuffer, 1, currRcvSize, file);
 				}
 				fclose(file);
-				fullyReceived = true;
 				printf("Received file successfully!\n");
+				fullyReceived = true;
 				showTime();
 				int done = 1;
 				write(serverSocket, &done, sizeof(done));
 			}
+			// Wait until other clients received file
 			while (1) {
 				if (receivedClient == 2) break;
 			}
-
-			received = false;
-			fullyReceived = false;
-			receivedClient = 0;
+            resetStatus();
 			printf("Closed\n\n");
 		}
+		// Received IP of client which have file, then download from that client
 		else if (downloadType == 2) {
 			read(serverSocket, receiveBuffer, sizeof(receiveBuffer));
 

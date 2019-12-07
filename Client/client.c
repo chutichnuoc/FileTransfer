@@ -12,9 +12,10 @@
 #include<stdio.h>
 #include<stdbool.h>
 #include<time.h>
+#include<sys/time.h>
 
 const int _bufferLength = 1024;
-const char *_quitCommand = "@quit";
+const char* _quitCommand = "@quit";
 
 // Status
 char fileName[1024];
@@ -28,17 +29,20 @@ pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
 
 // Show current time
 void showTime() {
-	time_t mytime = time(NULL);
-	char* time_str = ctime(&mytime);
-	time_str[strlen(time_str) - 1] = '\0';
-	printf("Current Time : %s\n", time_str);
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	double timeInMs = (now.tv_sec + (now.tv_usec / 1000000.0)) * 1000.0;
+	time_t timeInS = timeInMs / 1000;
+	struct tm* timeInHMS = localtime(&timeInS);
+	int milli = ((timeInMs / 1000) - ((int)(timeInMs / 1000))) * 1000;
+	printf("Current time: %d:%d:%d:%d\n", timeInHMS->tm_hour, timeInHMS->tm_min, timeInHMS->tm_sec, milli);
 }
 
 // Called when need to reset client's status
 void resetStatus() {
-    receivedClient = 0;
-    received = false;
-    fullyReceived = false;
+	receivedClient = 0;
+	received = false;
+	fullyReceived = false;
 }
 
 // Multi thread
@@ -61,7 +65,7 @@ void* handleRequest(void* arg) {
 		printf("Cannot find file '%s'!\n", fileName);
 		size = htonl(size);
 		write(connClientSocket, (void*)&size, sizeof(size));
-        pthread_mutex_lock(&mptr_clientCount);
+		pthread_mutex_lock(&mptr_clientCount);
 		receivedClient++;
 		pthread_mutex_unlock(&mptr_clientCount);
 	}
@@ -222,7 +226,7 @@ int main() {
 				printf("Cannot download file '%s'!\n", fileName);
 				received = true;
 				fullyReceived = true;
-                int done = 1;
+				int done = 1;
 				write(serverSocket, &done, sizeof(done));
 			}
 			// Receive file
@@ -247,7 +251,7 @@ int main() {
 			while (1) {
 				if (receivedClient == 2) break;
 			}
-            resetStatus();
+			resetStatus();
 			printf("Closed\n\n");
 		}
 		// Received IP of client which have file, then download from that client

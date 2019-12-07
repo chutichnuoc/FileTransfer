@@ -11,10 +11,11 @@
 #include<stdio.h>
 #include<stdbool.h>
 #include<time.h>
+#include<sys/time.h>
 
 const int _listenQueue = 1024;  // Backlog in listen()
 const int _bufferLength = 1024;
-const char *_quitCommand = "@quit";
+const char* _quitCommand = "@quit";
 
 // Status
 char* lastClientAddr = NULL;
@@ -30,27 +31,30 @@ pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
 
 // Show current time
 void showTime() {
-	time_t mytime = time(NULL);
-	char* time_str = ctime(&mytime);
-	time_str[strlen(time_str) - 1] = '\0';
-	printf("Current Time : %s\n", time_str);
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	double timeInMs = (now.tv_sec + (now.tv_usec / 1000000.0)) * 1000.0;
+	time_t timeInS = timeInMs / 1000;
+	struct tm* timeInHMS = localtime(&timeInS);
+	int milli = ((timeInMs / 1000) - ((int)(timeInMs / 1000))) * 1000;
+	printf("Current time: %d:%d:%d:%d\n", timeInHMS->tm_hour, timeInHMS->tm_min, timeInHMS->tm_sec, milli);
 }
 
 // Called when need to reset server's status
 void resetStatus() {
-    receivedNameClient = 0;
-    receivedFileClient = 0;
-    isFileSent = false;
-    allReceived = true;
+	receivedNameClient = 0;
+	receivedFileClient = 0;
+	isFileSent = false;
+	allReceived = true;
 }
 
 // Called when all client received file
 void setFileName() {
-    bzero(fileName, sizeof(fileName));
-    printf("\nEnter file name to send: ");
-    scanf("%s", fileName);
-    showTime();
-    resetStatus();
+	bzero(fileName, sizeof(fileName));
+	printf("\nEnter file name to send: ");
+	scanf("%s", fileName);
+	showTime();
+	resetStatus();
 }
 
 // Multi thread
@@ -71,8 +75,8 @@ void* handleRequest(void* arg) {
 	// First and second client will wait here until third client connect and server enter file's name
 	while (1) {
 		if (connectedClient == 3 && strcmp(fileName, "") != 0) {
-            break;
-        }
+			break;
+		}
 	}
 	// Send file to client
 	while (1) {
@@ -84,12 +88,12 @@ void* handleRequest(void* arg) {
 
 		// If server enter quitCommand, wait for all clients to receive it, then reset status and break;
 		if (strcmp(fileName, _quitCommand) == 0) {
-            while (1) {
-                if (receivedNameClient == 3) {
-                    resetStatus();
-                    break;
-                }
-            }
+			while (1) {
+				if (receivedNameClient == 3) {
+					break;
+				}
+			}
+			break;
 		}
 
 		// If downloadType = 1, client will receive file and send to others
@@ -158,7 +162,7 @@ void* handleRequest(void* arg) {
 
 		// Enter file's name again
 		if (receivedFileClient == 3) {
-            setFileName();
+			setFileName();
 		}
 	}
 	close(connClientSocket);
@@ -207,7 +211,15 @@ int main() {
 
 	unsigned int addrLength = sizeof(connClientAddr);
 
-	while (strcmp(fileName, _quitCommand) != 0) {
+	while (1) {
+		if (connectedClient == 3) {
+			while (1) {
+				if (strcmp(fileName, _quitCommand) == 0) {
+					break;
+				}
+			}
+			break;
+		}
 		connClientSocket = malloc(sizeof(int));
 		*connClientSocket = accept(serverSocket, (struct sockaddr*) & connClientAddr, &addrLength);
 		if (connClientSocket < 0) {

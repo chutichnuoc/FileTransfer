@@ -23,7 +23,6 @@ int clientCount = 0;
 int receivedClient = 0;
 int gobalSize = -1;
 bool received = false;
-bool fullyReceived = false;
 
 pthread_mutex_t mptr_clientCount = PTHREAD_MUTEX_INITIALIZER;
 
@@ -42,7 +41,6 @@ void showTime() {
 void resetStatus() {
 	receivedClient = 0;
 	received = false;
-	fullyReceived = false;
 }
 
 // Multi thread
@@ -145,6 +143,7 @@ int main() {
 	while (1) {
 		bzero(fileName, sizeof(fileName));
 		read(serverSocket, fileName, sizeof(fileName));
+		printf("fileName: %s\n", fileName);
 		if (strcmp(fileName, _quitCommand) == 0) {
 			break;
 		}
@@ -225,7 +224,6 @@ int main() {
 			if (fileSize == -1) {
 				printf("Cannot download file '%s'!\n", fileName);
 				received = true;
-				fullyReceived = true;
 				int done = 1;
 				write(serverSocket, &done, sizeof(done));
 			}
@@ -242,7 +240,6 @@ int main() {
 				}
 				fclose(file);
 				printf("Received file successfully!\n");
-				fullyReceived = true;
 				showTime();
 				int done = 1;
 				write(serverSocket, &done, sizeof(done));

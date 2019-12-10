@@ -86,13 +86,8 @@ void* handleRequest(void* arg) {
 		receivedNameClient++; // Increase number of clients that received file'name
 		pthread_mutex_unlock(&mptr_clientCount);
 
-		// If server enter quitCommand, wait for all clients to receive it, then reset status and break;
+		// If server enter quitCommand, break
 		if (strcmp(fileName, _quitCommand) == 0) {
-			while (1) {
-				if (receivedNameClient == 3) {
-					break;
-				}
-			}
 			break;
 		}
 
@@ -214,7 +209,7 @@ int main() {
 	while (1) {
 		if (connectedClient == 3) {
 			while (1) {
-				if (strcmp(fileName, _quitCommand) == 0) {
+				if (strcmp(fileName, _quitCommand) == 0 && receivedNameClient == 3) {
 					break;
 				}
 			}

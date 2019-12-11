@@ -143,7 +143,6 @@ int main() {
 	while (1) {
 		bzero(fileName, sizeof(fileName));
 		read(serverSocket, fileName, sizeof(fileName));
-		printf("fileName: %s\n", fileName);
 		if (strcmp(fileName, _quitCommand) == 0) {
 			break;
 		}

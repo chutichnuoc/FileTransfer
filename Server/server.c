@@ -68,6 +68,8 @@ void* handleRequest(void* arg) {
 
 	// Wait until 3 clients connect to server, then enter file's name, only run in thread of third client
 	if (connectedClient == 3) {
+        downloadType = 1;
+        lastClientAddr = lastClientAddrTmp;
 		printf("\nEnter file name to send: ");
 		scanf("%s", fileName);
 		showTime();
@@ -92,9 +94,7 @@ void* handleRequest(void* arg) {
 		}
 
 		// If downloadType = 1, client will receive file and send to others
-		if (lastClientAddr == NULL || downloadType == 1) {
-			lastClientAddr = lastClientAddrTmp;
-			downloadType = 1;
+		if (downloadType == 1) {
 			write(connClientSocket, &downloadType, sizeof(downloadType));
 			// Wait until all clients have file's name
 			while (1) {
